@@ -159,11 +159,12 @@ function renderBoard(){
     var wait=1000-(Date.now()-lastAt);
     if(wait>0){ if(!timer) timer=setTimeout(function(){ timer=null; load(why); },wait); return; }
     busy=true; lastAt=Date.now();
-    api('rpc/itec_survey_summary',{method:'POST',body:'{}'}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
+    var ac=('AbortController' in window)?new AbortController():null, to=setTimeout(function(){ if(ac){ console.log('[board] timeout'); ac.abort(); } },10000);
+    api('rpc/itec_survey_summary',{method:'POST',body:'{}',signal:ac?ac.signal:undefined}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
       console.log('[board] fetch', why, 'status', x[0], 'total', x[1]&&x[1].total);
       if(x[0]===200){ apply(x[1]); lastOk=new Date(); }
     }).catch(function(e){ console.log('[board] network', e); }).then(function(){
-      busy=false; foot(); if(again){ again=false; load('again'); }
+      clearTimeout(to); busy=false; foot(); if(again){ again=false; load('again'); }
     });
   }
   document.getElementById('reload').addEventListener('click',function(){ load('button'); });
