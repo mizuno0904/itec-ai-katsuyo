@@ -31,6 +31,7 @@ button.send:disabled{opacity:.5}
 .msg.err{color:var(--red)} .done{text-align:center;padding:30px 10px}
 .done b{display:block;font-size:24px;color:var(--green);margin-bottom:6px}
 .note{font-size:12px;color:var(--mute);margin-top:14px}
+.wait .state{font-size:18px;font-weight:700;color:var(--head);margin:18px 0 0}
 /* 投影用 */
 .board{max-width:1500px;margin:0 auto;padding:24px 28px}
 .bhead{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
@@ -69,6 +70,8 @@ Suggested solution: ${e.workaround}`),new Error(n)}static isWebSocketSupported()
 <script>
 /* ===== 設定（ここだけ書き換える） ===== */
 var CFG = {
+  t: 'itec_survey',     // 表と関数の接頭辞（検証版は itec_survey_t）
+  ch: 'itec-survey',    // プッシュのチャネル名（検証版は itec-survey-t）
   url: 'https://bhkjcanqzpcxmlxwerle.supabase.co',          // 例: https://xxxx.supabase.co
   key: 'sb_publishable_tFvxe1ZrMaJ3JJFLDDhkEg_dn8iz-wD', // 公開してよい publishable key
   publicUrl: 'https://itec-ai-lecture.vercel.app/survey/',      // 参加者に見せるURL（QRの中身）
@@ -89,11 +92,34 @@ function clientId(){
   return id;
 }
 
+function jpDay(iso){ try{ return new Date(iso).toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo',month:'long',day:'numeric'}); }catch(e){ return '12月3日'; } }
+function jpTime(iso){ try{ return new Date(iso).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'numeric',minute:'2-digit'}); }catch(e){ return '0:00'; } }
+/* 受付の状態：サーバーの集計関数の値で判定する（最終の判定は必ずサーバー側のトリガー） */
+function stateOf(s){ if(s.not_yet) return 'not_yet'; if(!s.is_open) return 'closed'; if(s.full) return 'full'; return 'open'; }
+function stateText(st, opensAt){
+  if(st==='not_yet') return '回答は'+jpDay(opensAt)+'（講演当日）から受け付けます。';
+  if(st==='closed') return '回答の受付は終了しました。';
+  if(st==='full') return '回答の受付上限に達しました。';
+  return '';
+}
+
 /* ===== 回答ページ ===== */
 function renderForm(){
   var done=false; try{ done=localStorage.getItem('itec_done')==='1'; }catch(e){}
   if(done){ document.getElementById('app').innerHTML='<div class="card done"><b>回答ありがとうございました</b>集計は前の画面でご覧ください。</div>'; return; }
-  var h='<form class="card" id="f" novalidate><h1>本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="sub">匿名です。お名前などは伺いません。1分ほどで終わります。</p>';
+  document.getElementById('app').innerHTML='<div class="card"><h1>本日の感想アンケート</h1><p class="sub">読み込み中…</p></div>';
+  api('rpc/'+CFG.t+'_summary',{method:'POST',body:'{}'}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
+    var st=(x[0]===200)?stateOf(x[1]):'unknown';
+    console.log('[survey] state', x[0], st, x[1]&&x[1].opens_at);
+    if(st==='not_yet'||st==='closed'||st==='full'){
+      document.getElementById('app').innerHTML='<div class="card wait"><h1>本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="state">'+esc(stateText(st,x[1].opens_at))+'</p>'+(st==='not_yet'?'<p class="note">講演の当日に、このページをもう一度開いてください。</p>':'')+'</div>';
+      return;
+    }
+    drawForm();
+  }).catch(function(e){ console.log('[survey] state network', e); drawForm(); });
+}
+function drawForm(){
+  var h='<form class="card" id="f" novalidate><h1>本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="sub">匿名です。お名前などは伺いません。1〜2分ほどで終わります。</p>';
   h+='<fieldset><legend>Q1. 今日の話は役に立ちましたか</legend><div class="opts five">';
   for(var i=1;i<=5;i++) h+='<label class="opt"><input type="radio" name="q1" value="'+i+'"><b>'+i+'</b>'+Q1L[i]+'</label>';
   h+='</div></fieldset><fieldset><legend>Q2. 役に立った話題<small>いくつでも</small></legend><div class="opts">';
@@ -113,14 +139,15 @@ function renderForm(){
     var body={client_id:clientId(), q1:+q1.value, q2:q2, q3:q3.value, q4:(f.q4.value.trim()||null)};
     btn.disabled=true; btn.textContent='送信中…';
     console.log('[survey] submit', {q1:body.q1,q2:body.q2,q3:body.q3,hasQ4:!!body.q4});
-    api('itec_survey_answers',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(body)}).then(function(r){
+    api(CFG.t+'_answers',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify(body)}).then(function(r){
       console.log('[survey] status', r.status);
       if(r.status===201){ try{ localStorage.setItem('itec_done','1'); }catch(e){} renderForm(); return; }
       return r.text().then(function(t){
         console.log('[survey] error body', t);
         msg.className='msg err';
-        if(r.status===409||/duplicate/.test(t)){ msg.textContent='このブラウザからは、すでに回答済みです。'; try{ localStorage.setItem('itec_done','1'); }catch(e){} }
-        else if(r.status===401||r.status===403){ msg.textContent='受付は終了しました。'; }
+        var code='', m=''; try{ var j=JSON.parse(t); code=j.code||''; m=j.message||''; }catch(e){}
+        if(r.status===409||code==='23505'){ msg.textContent='このブラウザからは、すでに回答済みです。'; try{ localStorage.setItem('itec_done','1'); }catch(e){} }
+        else if(code==='42501'&&(m==='not_yet'||m==='closed'||m==='full')){ msg.textContent=(m==='not_yet')?'回答は講演当日から受け付けます。':stateText(m); }
         else msg.textContent='送信できませんでした（'+r.status+'）。もう一度お試しください。';
         btn.disabled=false; btn.textContent='送信する';
       });
@@ -147,7 +174,7 @@ function renderBoard(){
   function foot(){ document.getElementById('upd').textContent=mode+(lastOk?'　最終更新 '+lastOk.toLocaleTimeString('ja-JP'):''); }
   function apply(s){
     document.getElementById('tot').textContent=s.total;
-    document.getElementById('state').textContent=s.is_open?'受付中':'受付を終了しました';
+    var st=stateOf(s); document.getElementById('state').textContent=(st==='not_yet')?jpDay(s.opens_at)+' '+jpTime(s.opens_at)+'から受付（講演当日）':(st==='closed')?'受付を終了しました':(st==='full')?'受付上限に達しました':'受付中';
     document.getElementById('g1').innerHTML=bars(s.q1,Q1B,s.total);
     document.getElementById('g3').innerHTML=bars(s.q3,Q3,s.total);
     document.getElementById('g2').innerHTML=bars(s.q2,Q2,s.total);
@@ -160,7 +187,7 @@ function renderBoard(){
     if(wait>0){ if(!timer) timer=setTimeout(function(){ timer=null; load(why); },wait); return; }
     busy=true; lastAt=Date.now();
     var ac=('AbortController' in window)?new AbortController():null, to=setTimeout(function(){ if(ac){ console.log('[board] timeout'); ac.abort(); } },10000);
-    api('rpc/itec_survey_summary',{method:'POST',body:'{}',signal:ac?ac.signal:undefined}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
+    api('rpc/'+CFG.t+'_summary',{method:'POST',body:'{}',signal:ac?ac.signal:undefined}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
       console.log('[board] fetch', why, 'status', x[0], 'total', x[1]&&x[1].total);
       if(x[0]===200){ apply(x[1]); lastOk=new Date(); }
     }).catch(function(e){ console.log('[board] network', e); }).then(function(){
@@ -172,7 +199,7 @@ function renderBoard(){
   try{
     var rt=new window.ItecRealtimeClient(CFG.url.replace(/^http/,'ws')+'/realtime/v1',{params:{apikey:CFG.key}});
     rt.connect();
-    var ch=rt.channel('itec-survey',{config:{private:false,broadcast:{self:false}}});
+    var ch=rt.channel(CFG.ch,{config:{private:false,broadcast:{self:false}}});
     ch.on('broadcast',{event:'changed'},function(){ console.log('[board] push'); load('push'); });
     ch.subscribe(function(st,err){
       console.log('[board] channel', st, err||'');
