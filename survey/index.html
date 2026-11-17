@@ -95,7 +95,7 @@ function clientId(){
 function jpDay(iso){ try{ return new Date(iso).toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo',month:'long',day:'numeric'}); }catch(e){ return '12月3日'; } }
 function jpTime(iso){ try{ return new Date(iso).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'numeric',minute:'2-digit'}); }catch(e){ return '0:00'; } }
 /* 受付の状態：サーバーの集計関数の値で判定する（最終の判定は必ずサーバー側のトリガー） */
-function stateOf(s){ if(s.not_yet) return 'not_yet'; if(!s.is_open) return 'closed'; if(s.full) return 'full'; return 'open'; }
+function stateOf(s){ if(!s||typeof s.not_yet!=='boolean'||typeof s.is_open!=='boolean'||typeof s.full!=='boolean'||typeof s.opens_at!=='string') return 'unknown'; if(s.not_yet) return 'not_yet'; if(!s.is_open) return 'closed'; if(s.full) return 'full'; return 'open'; }
 function stateText(st, opensAt){
   if(st==='not_yet') return '回答は'+jpDay(opensAt)+'（講演当日）から受け付けます。';
   if(st==='closed') return '回答の受付は終了しました。';
@@ -115,8 +115,13 @@ function renderForm(){
       document.getElementById('app').innerHTML='<div class="card wait"><h1>本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="state">'+esc(stateText(st,x[1].opens_at))+'</p>'+(st==='not_yet'?'<p class="note">講演の当日に、このページをもう一度開いてください。</p>':'')+'</div>';
       return;
     }
+    if(st==='unknown'){ showRetry(); return; }
     drawForm();
-  }).catch(function(e){ console.log('[survey] state network', e); drawForm(); });
+  }).catch(function(e){ console.log('[survey] state network', e); showRetry(); });
+}
+function showRetry(){
+  document.getElementById('app').innerHTML='<div class="card wait"><h1>本日の感想アンケート</h1><p class="state">接続できませんでした。</p><p class="sub">電波の良い場所で、もう一度お試しください。</p><button class="send" id="retry" type="button">もう一度読み込む</button></div>';
+  document.getElementById('retry').addEventListener('click',function(){ console.log('[survey] retry'); renderForm(); });
 }
 function drawForm(){
   var h='<form class="card" id="f" novalidate><h1>本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="sub">匿名です。お名前などは伺いません。1〜2分ほどで終わります。</p>';
