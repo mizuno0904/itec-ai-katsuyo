@@ -31,6 +31,7 @@ button.send:disabled{opacity:.5}
 .msg.err{color:var(--red)} .done{text-align:center;padding:30px 10px}
 .done b{display:block;font-size:24px;color:var(--green);margin-bottom:6px}
 .note{font-size:12px;color:var(--mute);margin-top:14px}
+.deadline{font-size:14px;font-weight:700;color:var(--head);background:var(--callout);border-radius:10px;padding:10px 12px;margin-top:12px}
 .wait .state{font-size:18px;font-weight:700;color:var(--head);margin:18px 0 0}
 /* 投影用 */
 .board{max-width:1500px;margin:0 auto;padding:24px 28px}
@@ -103,16 +104,17 @@ function stateText(st, opensAt){
   return '';
 }
 
+var DEADLINE='<p class="deadline">回答は2026年12月3日の講演から1時間以内で締め切ります。</p>';
 /* ===== 回答ページ ===== */
 function renderForm(){
   var done=false; try{ done=localStorage.getItem('itec_done')==='1'; }catch(e){}
-  if(done){ document.getElementById('app').innerHTML='<div class="card done"><b>回答ありがとうございました</b>集計は前の画面でご覧ください。</div>'; return; }
-  document.getElementById('app').innerHTML='<div class="card"><h1>【検証用】本日の感想アンケート</h1><p class="sub">読み込み中…</p></div>';
+  if(done){ document.getElementById('app').innerHTML='<div class="card done"><b>回答ありがとうございました</b>集計は前の画面でご覧ください。'+DEADLINE+'</div>'; return; }
+  document.getElementById('app').innerHTML='<div class="card"><h1>【検証用】本日の感想アンケート</h1><p class="sub">読み込み中…</p>'+DEADLINE+'</div>';
   api('rpc/'+CFG.t+'_summary',{method:'POST',body:'{}'}).then(function(r){ return r.json().then(function(j){ return [r.status,j]; }); }).then(function(x){
     var st=(x[0]===200)?stateOf(x[1]):'unknown';
     console.log('[survey] state', x[0], st, x[1]&&x[1].opens_at);
     if(st==='not_yet'||st==='closed'||st==='full'){
-      document.getElementById('app').innerHTML='<div class="card wait"><h1>【検証用】本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="state">'+esc(stateText(st,x[1].opens_at))+'</p>'+(st==='not_yet'?'<p class="note">講演の当日に、このページをもう一度開いてください。</p>':'')+'</div>';
+      document.getElementById('app').innerHTML='<div class="card wait"><h1>【検証用】本日の感想アンケート</h1>'+DEADLINE+'<p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="state">'+esc(stateText(st,x[1].opens_at))+'</p>'+(st==='not_yet'?'<p class="note">講演の当日に、このページをもう一度開いてください。</p>':'')+'</div>';
       return;
     }
     if(st==='unknown'){ showRetry(); return; }
@@ -120,11 +122,11 @@ function renderForm(){
   }).catch(function(e){ console.log('[survey] state network', e); showRetry(); });
 }
 function showRetry(){
-  document.getElementById('app').innerHTML='<div class="card wait"><h1>本日の感想アンケート</h1><p class="state">接続できませんでした。</p><p class="sub">電波の良い場所で、もう一度お試しください。</p><button class="send" id="retry" type="button">もう一度読み込む</button></div>';
+  document.getElementById('app').innerHTML='<div class="card wait"><h1>本日の感想アンケート</h1>'+DEADLINE+'<p class="state">接続できませんでした。</p><p class="sub">電波の良い場所で、もう一度お試しください。</p><button class="send" id="retry" type="button">もう一度読み込む</button></div>';
   document.getElementById('retry').addEventListener('click',function(){ console.log('[survey] retry'); renderForm(); });
 }
 function drawForm(){
-  var h='<form class="card" id="f" novalidate><h1>【検証用】本日の感想アンケート</h1><p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="sub">匿名です。お名前などは伺いません。1〜2分ほどで終わります。</p>';
+  var h='<form class="card" id="f" novalidate><h1>【検証用】本日の感想アンケート</h1>'+DEADLINE+'<p class="sub">ITEC メンター・メンティー交流会「明日から使えるAI活用」</p><p class="sub">匿名です。お名前などは伺いません。1〜2分ほどで終わります。</p>';
   h+='<fieldset><legend>Q1. 今日の話は役に立ちましたか</legend><div class="opts five">';
   for(var i=1;i<=5;i++) h+='<label class="opt"><input type="radio" name="q1" value="'+i+'"><b>'+i+'</b>'+Q1L[i]+'</label>';
   h+='</div></fieldset><fieldset><legend>Q2. 役に立った話題<small>いくつでも</small></legend><div class="opts">';
