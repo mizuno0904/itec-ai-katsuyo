@@ -39,6 +39,7 @@ body.revealed .card .ans{display:block}
 </style>
 </head>
 <body>
+<div style="max-width:700px;margin:0 auto 10px;text-align:right"><button type="button" class="koe-close" aria-label="このページを閉じる" style="font:inherit;font-size:15px;font-weight:700;padding:9px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(30,24,20,.85);color:#f3e6cf;cursor:pointer">× 閉じる</button></div>
 <div class="wrap">
 <h1>ナレーション　ブラインド聴き比べ</h1>
 <p class="lead">
@@ -132,6 +133,13 @@ document.getElementById('rev').onclick=e=>{
   document.body.classList.toggle('revealed');
   e.target.textContent=document.body.classList.contains('revealed')?'こたえを隠す':'こたえを見る';
 };
+</script>
+<div style="max-width:700px;margin:24px auto 0;text-align:right"><button type="button" class="koe-close" aria-label="このページを閉じる" style="font:inherit;font-size:15px;font-weight:700;padding:9px 18px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(30,24,20,.85);color:#f3e6cf;cursor:pointer">× 閉じる</button></div>
+<script>
+document.querySelectorAll('.koe-close').forEach(function(b){b.addEventListener('click',function(){
+  window.close();
+  setTimeout(function(){ if(history.length>1){history.back();} else {location.href='https://itec-ai-lecture.vercel.app/';} },300);
+});});
 </script>
 </body>
 </html>
